@@ -14,9 +14,8 @@ Classes:
 """
 
 import numpy as np
-import matplotlib.pyplot as plt
 import matplotlib as mpl
-import pylab
+import matplotlib.pyplot as plt
 
 mpl.rcParams['font.family'] = 'Arial'
 plt.rcParams['font.size'] = 18
