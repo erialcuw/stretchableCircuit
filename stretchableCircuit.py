@@ -4,10 +4,10 @@ Created on Fri Mar 26 09:06:14 2021
 
 @author: Veronica Reynolds
 
-Perform calculations of the strain-dependent behavior of elastic transistors and simple circuits. 
+Perform calculations of the strain-dependent behavior of elastic transistors and simple circuits.
 
 Classes:
-    
+
     transistor
     inverter
 
@@ -22,10 +22,10 @@ plt.rcParams['font.size'] = 18
 plt.rcParams['axes.linewidth'] = 2
 
 class transistor():
-    
+
     """
     Define a stretchable transistor object.
-    
+
     Instance Variables:
         flavor (string): Flavor of transistor: 'TFT', 'EDLT', or 'OECT'
         Ttype (string): Type of transistor: 'p-type' or 'n-type'
@@ -46,38 +46,38 @@ class transistor():
             (3) biaxial 'biaxial-WL'
         er (List[float]): List of extension ratios over which to calculate
             Note: This must include the undeformed state (er = 1)
-                          
+
     Functions:
         calculateStrainDependence(self)
         calculateI_SD(self)
         plotIVvsDeformation(self, er_plot)
         calculateRelativeI_SD(self)
         plotRelativeI_SD(self)
-    
+
     """
-    
+
     def __init__(self, flavor, Ttype, W, L, d, C, mu, V_T, V_DD, V_resolution, deformMode, er):
-        
+
         if flavor != 'TFT' and flavor != 'EDLT' and flavor !='OECT':
             print('Not a valid flavor of transistor (options: TFT, EDLT, or OECT).')
         self.flavor = flavor
-        
+
         if Ttype != 'n' and Ttype != 'p':
             print('Not a valid type of transistor (options: n or p).')
         self.Ttype = Ttype
-        
+
         self.W = W
         self.L = L
         self.d = d
         self.C = C
         self.mu = mu
         self.V_T = V_T
-        
+
         self.V_DD = V_DD
         self.V_resolution = V_resolution
-        
+
         self.V_range = np.linspace(0,V_DD,V_resolution)
-        
+
         if self.Ttype == 'n':
             self.V_G = self.V_range
             self.V_SD = self.V_range
@@ -86,34 +86,34 @@ class transistor():
             self.V_G = self.V_range-V_DD
             self.V_SD = self.V_range-V_DD
             self.I_SD_maxidx = 0
-            
+
         self.V_SD_satidx = np.abs(np.abs(self.V_SD)-np.abs(self.V_DD)).argmin()
-        
+
         if deformMode != 'uniaxial-L' and deformMode != 'uniaxial-W' and deformMode != 'biaxial-WL':
             print('Not a valid deformation mode (options: uniaxial-L, uniaxial-W, biaxial-WL).')
         self.deformMode = deformMode
-        
+
         if 1 not in er:
             print('The range of extension ratios to be modeled must include 1 (the undeformed state).')
         self.er = np.asarray(er)
-        
+
         self.er_1_idx = np.where(self.er==1)
-        
+
         # Define the extension ratios in all three dimensions based on deformation mode.
         if self.deformMode == 'uniaxial-L':
-            
+
             self.erL = self.er
             self.erW = 1/(self.erL**(1/2))
             self.ert = 1/(self.erL**(1/2))
-        
+
         elif self.deformMode == 'uniaxial-W':
-            
+
             self.erW = self.er
             self.erL = 1/(self.erW**(1/2))
             self.ert = 1/(self.erW**(1/2))
-            
+
         elif self.deformMode == 'biaxial-WL':
-            
+
             self.erL = self.er
             self.erW = self.er
             self.ert = np.zeros((len(self.erW), len(self.erL)))
@@ -122,7 +122,7 @@ class transistor():
                     self.ert[i,j] = 1/(self.erL[j]*self.erW[i])
 
     def calculateStrainDependence(self):
-        """Define the constant beta, the strain-dependent V_T, and the 
+        """Define the constant beta, the strain-dependent V_T, and the
         strain-dependent C based on transistor type.
         """
 
@@ -196,7 +196,7 @@ class transistor():
 
     def plotIVvsDeformation(self, er_plot):
         """Plot a series of I-V for a single transistor vs. deformation.
-        
+
         Inputs:
             er_plot (List[float]): list of the extension ratios to plot.
             Note: These values should be contained in your extension ratio sweep.
@@ -219,12 +219,12 @@ class transistor():
             ax.set_xlabel('$V_\mathrm{SD}$ (V)', labelpad=10)
             ax.set_ylabel('$I_\mathrm{SD}$ (A)', labelpad=10)
 
-            cm = pylab.get_cmap('viridis')
+            cm = mpl.cm.get_cmap('viridis')
 
             for i in range((np.size(er_plot,0))):
-                ax.plot(self.V_SD, self.I_SD[:,self.I_SD_maxidx,int(idx_er[i])], 
-                        linewidth=2, 
-                        color=cm(1.*i/np.size(er_plot)), 
+                ax.plot(self.V_SD, self.I_SD[:,self.I_SD_maxidx,int(idx_er[i])],
+                        linewidth=2,
+                        color=cm(1.*i/np.size(er_plot)),
                         label=('$\lambda$ = '+str(er_plot[i])))
 
             plt.legend(bbox_to_anchor=(1.02, 1.0), loc='upper left')
@@ -236,7 +236,7 @@ class transistor():
         else:
 
             print('Currently unsupported.')
-                                
+
     def calculateRelativeI_SD(self):
         """Calculate the relative source-drain current (I_SD/I_SD(er=1)) in the saturation regime.
         The value of V_G that gives the highest magnitude I_SD is used.
@@ -258,9 +258,9 @@ class transistor():
             for i in range(np.size(self.erL)):
                 for j in range(np.size(self.erW)):
                     self.I_SDrel[j,i] = self.I_SD[self.V_SD_satidx, self.I_SD_maxidx, j, i]/self.I_SD_undeformed
-                    
+
     def plotRelativeI_SD(self):
-    
+
         """Plot relative source-drain current in the saturation regime vs. extension ratio."""
 
         if self.deformMode == 'uniaxial-L' or self.deformMode ==  'uniaxial-W':
@@ -287,49 +287,49 @@ class transistor():
             ax.set_xlabel('$\lambda_L$', labelpad=10)
             ax.set_ylabel('$\lambda_W$', labelpad=10)
 
-            im = ax.imshow(self.I_SDrel, interpolation='none', cmap=pylab.get_cmap('viridis'),
+            im = ax.imshow(self.I_SDrel, interpolation='none', cmap=mpl.cm.get_cmap('viridis'),
                    origin='lower', extent=[np.min(self.er), np.max(self.er), np.min(self.er), np.max(self.er)])
 
             fig.colorbar(im, ax=ax)
 
             plt.show()
-            
+
 class inverter():
-    
+
     """
     Define a stretchable inverter object.
-    
+
     Instance Variables:
         ntype (transistor): The n-type transistor in the inverter
         ptype (transistor): The p-type transistor in the inverter
-                          
+
     Functions:
         buildVTC(self)
         plotLoadCurves(self, V_in_LCplot, er_LCplot)
         plotLoadCurves_alternative(self, V_in_LCplot, er_LCplot)
         plotVTC(self, er_plot)
         plotVTCeye(self, er_plot)
-    
+
     """
-    
+
     def __init__(self, ntype, ptype):
-        
+
         self.ntype = ntype
         self.ptype = ptype
-        
+
         if np.array_equal(ntype.er, ptype.er) == False:
             print('The n-type and p-type transistors must have identical arrays of extension ratios (er).')
-            
+
         if ntype.V_DD != ptype.V_DD:
             print('The n-type and p-type transistors must have identical supply voltages (V_DD).')
 
     def buildVTC(self):
-        
+
         """
         Build the voltage transfer curve (VTC) by finding where the n- and p-type load curves cross.
         The accuracy of this calculation depends on your voltage scan resolution, V_resolution.
         """
-        
+
         if (self.ntype.deformMode == 'uniaxial-L' or self.ntype.deformMode ==  'uniaxial-W') and (self.ptype.deformMode == 'uniaxial-L' or self.ptype.deformMode ==  'uniaxial-W'):
             self.V_out_cross = np.zeros((np.size(self.ntype.V_G,0),np.size(self.ntype.er,0)))
             for i in range(np.size(self.ntype.er)):
@@ -348,13 +348,13 @@ class inverter():
                             if self.ntype.I_SD[k,j,i,h]>=self.ptype.I_SD[k,j,i,h]:
                                 self.V_out_cross[j,i,h] = self.ntype.V_SD[k]
                                 break
-                                
+
         else:
             print('This deformation scenario is unsupported.')
-            
-    def plotLoadCurves(self, V_in_LCplot, er_LCplot): 
+
+    def plotLoadCurves(self, V_in_LCplot, er_LCplot):
         """Plot a series of load curves.
-        
+
         Inputs:
             V_in_LCplot (List[float]): list of the input voltages to plot
                 Note: These values should be contained in your voltage sweep.
@@ -385,13 +385,13 @@ class inverter():
             ax.set_xlabel('$V_\mathrm{SD}$ (V)', labelpad=10)
             ax.set_ylabel('$I_\mathrm{SD}$ (A)', labelpad=10)
 
-            cm = pylab.get_cmap('viridis')
+            cm = mpl.cm.get_cmap('viridis')
 
             for i in range((np.size(V_in_LCplot))):
-                ax.plot(self.ntype.V_SD, self.ntype.I_SD[:,int(idx_n[i]),idx_er], 
-                        linewidth=2, color=cm(1.*i/np.size(V_in_LCplot)), 
+                ax.plot(self.ntype.V_SD, self.ntype.I_SD[:,int(idx_n[i]),idx_er],
+                        linewidth=2, color=cm(1.*i/np.size(V_in_LCplot)),
                         label=('$V_\mathrm{in}$ = '+str(V_in_LCplot[i])+' V'))
-                ax.plot(self.ntype.V_SD, self.ptype.I_SD[:,int(idx_p[i]),idx_er], 
+                ax.plot(self.ntype.V_SD, self.ptype.I_SD[:,int(idx_p[i]),idx_er],
                         linewidth=2, color=cm(1.*i/np.size(V_in_LCplot)), linestyle='--')
 
             plt.legend(bbox_to_anchor=(1.02, 1.0), loc='upper left')
@@ -403,7 +403,7 @@ class inverter():
         else:
 
             print('Currently unsupported.')
-            
+
     def plotLoadCurves_alternative(self, V_in_LCplot, er_LCplot):
         """Plot a series of load curves, alternative coordinate system.
 
@@ -436,13 +436,13 @@ class inverter():
             ax.set_xlabel('$V_\mathrm{SD}$ (V)', labelpad=10)
             ax.set_ylabel('$I_\mathrm{SD}$ (A)', labelpad=10)
 
-            cm = pylab.get_cmap('viridis')
+            cm = mpl.cm.get_cmap('viridis')
 
             for i in range((np.size(V_in_LCplot))):
-                ax.plot(self.ntype.V_SD, self.ntype.I_SD[:,int(idx_n[i]),idx_er], 
-                        linewidth=2, color=cm(1.*i/np.size(V_in_LCplot)), 
+                ax.plot(self.ntype.V_SD, self.ntype.I_SD[:,int(idx_n[i]),idx_er],
+                        linewidth=2, color=cm(1.*i/np.size(V_in_LCplot)),
                         label=('$V_\mathrm{in}$ = '+str(V_in_LCplot[i])+' V'))
-                ax.plot(self.ptype.V_SD, self.ptype.I_SD[:,int(idx_p[i]),idx_er], 
+                ax.plot(self.ptype.V_SD, self.ptype.I_SD[:,int(idx_p[i]),idx_er],
                         linewidth=2, color=cm(1.*i/np.size(V_in_LCplot)), linestyle='--')
 
             plt.legend(bbox_to_anchor=(1.02, 1.0), loc='upper left')
@@ -452,7 +452,7 @@ class inverter():
         else:
 
             print('Currently unsupported.')
-            
+
     def plotVTC(self, er_plot):
         """Plot the voltage transfer curve of the inverter vs. deformation.
 
@@ -481,11 +481,11 @@ class inverter():
             ax.set_xlabel('$V_\mathrm{in}$ (V)', labelpad=10)
             ax.set_ylabel('$V_\mathrm{out}$ (V)', labelpad=10)
 
-            cm = pylab.get_cmap('viridis')
+            cm = mpl.cm.get_cmap('viridis')
 
             for i in range((np.size(er_plot,0))):
-                ax.plot(self.ntype.V_G, self.V_out_cross[:,int(idx_er[i])], 
-                        linewidth=2, color=cm(1.*i/np.size(er_plot)), 
+                ax.plot(self.ntype.V_G, self.V_out_cross[:,int(idx_er[i])],
+                        linewidth=2, color=cm(1.*i/np.size(er_plot)),
                         label=('$\lambda$ = '+str(er_plot[i])))
 
             plt.legend(bbox_to_anchor=(1.02, 1.0), loc='upper left')
@@ -495,7 +495,7 @@ class inverter():
         else:
 
             print('Currently unsupported.')
-            
+
     def plotVTCeye(self, er_plot):
         """Plot the voltage transfer curve of the inverter vs. deformation as an eye diagram.
         The VTC is overlaid with itself, flipped and rotated.
@@ -532,13 +532,13 @@ class inverter():
             ax.set_xlabel('$V_\mathrm{in}$ (V)', labelpad=10)
             ax.set_ylabel('$V_\mathrm{out}$ (V)', labelpad=10)
 
-            cm = pylab.get_cmap('viridis')
+            cm = mpl.cm.get_cmap('viridis')
 
             for i in range((np.size(er_plot,0))):
-                ax.plot(self.ntype.V_G, self.V_out_cross[:,int(idx_er[i])], 
-                        linewidth=2, color=cm(1.*i/np.size(er_plot)), 
+                ax.plot(self.ntype.V_G, self.V_out_cross[:,int(idx_er[i])],
+                        linewidth=2, color=cm(1.*i/np.size(er_plot)),
                         label=('$\lambda$ = '+str(er_plot[i])))
-                ax.plot(eye_x[:,int(idx_er[i])], eye_y[:,int(idx_er[i])], 
+                ax.plot(eye_x[:,int(idx_er[i])], eye_y[:,int(idx_er[i])],
                         linewidth=2, color=cm(1.*i/np.size(er_plot)),linestyle='--')
 
             plt.legend(bbox_to_anchor=(1.02, 1.0), loc='upper left')
