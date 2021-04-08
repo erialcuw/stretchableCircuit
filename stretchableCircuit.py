@@ -16,19 +16,20 @@ Classes:
 import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
+from Types import Flavor,Ttype,DeformMode,AutoName
+from typing import List
 
 mpl.rcParams['font.family'] = 'Arial'
 plt.rcParams['font.size'] = 18
 plt.rcParams['axes.linewidth'] = 2
 
-class transistor():
-
+class Transistor:
     """
     Define a stretchable transistor object.
 
     Instance Variables:
-        flavor (string): Flavor of transistor: 'TFT', 'EDLT', or 'OECT'
-        Ttype (string): Type of transistor: 'p-type' or 'n-type'
+        flavor (Flavor): Flavor of transistor: 'TFT', 'EDLT', or 'OECT'
+        Ttype (Ttype): Type of transistor: 'p-type' or 'n-type'
         W (float): Width of the semiconducting channel
             Arbitrary dimensional units, as long as it matches L
         L (float): Length of the semiconducting channel
@@ -41,9 +42,9 @@ class transistor():
         V_DD (float): Supply voltage [V]
         V_resolution (int): Resolution of the voltage sweep
         deformMode (string): Deformation axis options:
-            (1) uniaxial along channel length 'uniaxial-L'
-            (2) uniaxial along channel width 'uniaxial-W'
-            (3) biaxial 'biaxial-WL'
+            (1) uniaxial along channel length DeformMode.uniaxial_L
+            (2) uniaxial along channel width DeformMode.uniaxial_W
+            (3) biaxial DeformMode.biaxial_WL
         er (List[float]): List of extension ratios over which to calculate
             Note: This must include the undeformed state (er = 1)
 
@@ -56,15 +57,32 @@ class transistor():
 
     """
 
-    def __init__(self, flavor, Ttype, W, L, d, C, mu, V_T, V_DD, V_resolution, deformMode, er):
+    def __init__(
+        self, 
+        flavor: Flavor, 
+        t_type: Ttype, 
+        W: float, 
+        L: float, 
+        d: float, 
+        C: float, 
+        mu: float, 
+        V_T: float, 
+        V_DD: float, 
+        V_resolution: int,
+        deformMode: DeformMode, 
+        er: List[float]
+    ):
+        if not isinstance(flavor, Flavor):
+            raise ValueError(f'Not a valid flavor of transistor (options: {AutoName.listAllTypes(Flavor)}).')
 
-        if flavor != 'TFT' and flavor != 'EDLT' and flavor !='OECT':
-            print('Not a valid flavor of transistor (options: TFT, EDLT, or OECT).')
+        if not isinstance(t_type, Ttype):
+            raise ValueError(f'Not a valid type of transistor (options: {AutoName.listAllTypes(Ttype)}).')
+        
+        if not isinstance(deformMode, DeformMode):
+            raise ValueError(f'Not a valid type of deformation (options: {AutoName.listAllTypes(DeformMode)}).')
+
+        self.Ttype = t_type
         self.flavor = flavor
-
-        if Ttype != 'n' and Ttype != 'p':
-            print('Not a valid type of transistor (options: n or p).')
-        self.Ttype = Ttype
 
         self.W = W
         self.L = L
@@ -78,42 +96,37 @@ class transistor():
 
         self.V_range = np.linspace(0,V_DD,V_resolution)
 
-        if self.Ttype == 'n':
+        if self.Ttype == Ttype.n:
             self.V_G = self.V_range
             self.V_SD = self.V_range
             self.I_SD_maxidx = len(self.V_G)-1
-        elif self.Ttype == 'p':
+        elif self.Ttype == Ttype.p:
             self.V_G = self.V_range-V_DD
             self.V_SD = self.V_range-V_DD
             self.I_SD_maxidx = 0
 
         self.V_SD_satidx = np.abs(np.abs(self.V_SD)-np.abs(self.V_DD)).argmin()
 
-        if deformMode != 'uniaxial-L' and deformMode != 'uniaxial-W' and deformMode != 'biaxial-WL':
-            print('Not a valid deformation mode (options: uniaxial-L, uniaxial-W, biaxial-WL).')
         self.deformMode = deformMode
 
         if 1 not in er:
-            print('The range of extension ratios to be modeled must include 1 (the undeformed state).')
+            raise ValueError('The range of extension ratios to be modeled must include 1 (the undeformed state).')
         self.er = np.asarray(er)
 
         self.er_1_idx = np.where(self.er==1)
 
         # Define the extension ratios in all three dimensions based on deformation mode.
-        if self.deformMode == 'uniaxial-L':
-
+        if self.deformMode == DeformMode.uniaxial_L:
             self.erL = self.er
             self.erW = 1/(self.erL**(1/2))
             self.ert = 1/(self.erL**(1/2))
 
-        elif self.deformMode == 'uniaxial-W':
-
+        elif self.deformMode == DeformMode.uniaxial_W:
             self.erW = self.er
             self.erL = 1/(self.erW**(1/2))
             self.ert = 1/(self.erW**(1/2))
 
-        elif self.deformMode == 'biaxial-WL':
-
+        elif self.deformMode == DeformMode.biaxial_WL:
             self.erL = self.er
             self.erW = self.er
             self.ert = np.zeros((len(self.erW), len(self.erL)))
@@ -121,42 +134,55 @@ class transistor():
                 for j in range(len(self.erL)):
                     self.ert[i,j] = 1/(self.erL[j]*self.erW[i])
 
+    def isUniaxial(self):
+        """
+        Returns if circuit is uniaxial
+        """
+        return self.deformMode in [DeformMode.uniaxial_L, DeformMode.uniaxial_W]
+    
+    def isBiaxial(self):
+        """
+        Returns if circuit is Biaxial
+        """
+        return self.deformMode in [DeformMode.biaxial_WL]
+
     def calculateStrainDependence(self):
-        """Define the constant beta, the strain-dependent V_T, and the
+        """
+        Define the constant beta, the strain-dependent V_T, and the
         strain-dependent C based on transistor type.
         """
 
-        if self.flavor == 'TFT':
+        if self.flavor == Flavor.TFT:
             self.beta = (self.W/self.L)*self.mu*self.C
             self.V_T_er = self.V_T*self.ert
             self.C_er = self.C*(self.ert**(-1))
-            if self.deformMode == 'uniaxial-L' or self.deformMode == 'uniaxial-W':
+            if self.isUniaxial():
                 self.geo_er = (self.W*self.erW)/(self.L*self.erL)
-            elif self.deformMode == 'biaxial-WL':
+            elif self.isBiaxial():
                 self.geo_er = np.zeros((len(self.erW), len(self.erL)))
                 for i in range(len(self.erW)):
                     for j in range(len(self.erL)):
                         self.geo_er[i,j] = (self.W*self.erW[i])/(self.L*self.erL[j])
 
-        elif self.flavor == 'EDLT':
+        elif self.flavor == Flavor.EDLT:
             self.beta = (self.W/self.L)*self.mu*self.C
             self.V_T_er = self.V_T*np.ones(np.shape(self.ert))
             self.C_er = self.C*np.ones(np.shape(self.ert))
-            if self.deformMode == 'uniaxial-L' or self.deformMode == 'uniaxial-W':
+            if self.isUniaxial():
                 self.geo_er = (self.W*self.erW)/(self.L*self.erL)
-            elif self.deformMode == 'biaxial-WL':
+            elif self.isBiaxial():
                 self.geo_er = np.zeros((len(self.erW), len(self.erL)))
                 for i in range(len(self.erW)):
                     for j in range(len(self.erL)):
                         self.geo_er[i,j] = (self.W*self.erW[i])/(self.L*self.erL[j])
 
-        elif self.flavor == 'OECT':
+        elif self.flavor == Flavor.OECT:
             self.beta = (self.W/self.L)*self.d*self.mu*self.C
             self.V_T_er = self.V_T*np.ones(np.shape(self.ert))
             self.C_er = self.C*np.ones(np.shape(self.ert))
-            if self.deformMode == 'uniaxial-L' or self.deformMode == 'uniaxial-W':
+            if self.isUniaxial():
                 self.geo_er = ((self.W*self.erW)/(self.L*self.erL))*(self.d*self.ert)
-            elif self.deformMode == 'biaxial-WL':
+            elif self.isBiaxial():
                 self.geo_er = np.zeros((len(self.erW), len(self.erL)))
                 for i in range(len(self.erW)):
                     for j in range(len(self.erL)):
@@ -165,22 +191,20 @@ class transistor():
     def calculateI_SD(self):
         """Calculate the strain-dependent source-drain current I_SD."""
 
-        if self.deformMode == 'uniaxial-L' or self.deformMode ==  'uniaxial-W':
-
+        if self.isUniaxial():
             self.I_SD = np.zeros((np.size(self.V_SD), np.size(self.V_G), np.size(self.erL)))
 
             for i in range(np.size(self.erL)):
                 for j in range(np.size(self.V_G)):
                     for k in range(np.size(self.V_SD)):
-                        if abs(self.V_G[j])<abs(self.V_T_er[i]):
-                            self.I_SD[k,j,i]=0
-                        elif abs(self.V_SD[k])<abs(self.V_G[j]-self.V_T_er[i]): # linear regime
-                            self.I_SD[k,j,i]=self.geo_er[i]*self.C_er[i]*self.mu*(((self.V_G[j]-self.V_T_er[i])*self.V_SD[k])-((self.V_SD[k]**2)/2))
-                        elif abs(self.V_SD[k])>=abs(self.V_G[j]-self.V_T_er[i]): # saturation regime
-                            self.I_SD[k,j,i]=self.geo_er[i]*self.C_er[i]*self.mu*(((self.V_G[j]-self.V_T_er[i])**2)/2)
+                        if abs(self.V_G[j]) < abs(self.V_T_er[i]):
+                            self.I_SD[k,j,i] = 0
+                        elif abs(self.V_SD[k]) < abs(self.V_G[j] - self.V_T_er[i]): # linear regime
+                            self.I_SD[k,j,i] = self.geo_er[i] * self.C_er[i] * self.mu * (((self.V_G[j] - self.V_T_er[i]) * self.V_SD[k]) - ((self.V_SD[k]**2) / 2))
+                        elif abs(self.V_SD[k])>=abs(self.V_G[j] - self.V_T_er[i]): # saturation regime
+                            self.I_SD[k,j,i] = self.geo_er[i] * self.C_er[i] * self.mu * (((self.V_G[j] - self.V_T_er[i])**2) / 2)
 
-        elif self.deformMode == 'biaxial-WL':
-
+        elif self.isBiaxial():
             self.I_SD = np.zeros((np.size(self.V_SD), np.size(self.V_G), np.size(self.erW), np.size(self.erL)))
 
             for h in range(np.size(self.erL)):
@@ -202,8 +226,7 @@ class transistor():
             Note: These values should be contained in your extension ratio sweep.
         """
 
-        if self.deformMode == 'uniaxial-L' or self.deformMode ==  'uniaxial-W':
-
+        if self.isUniaxial():
             idx_er = np.zeros((np.size(er_plot)))
 
             for i in range((np.size(er_plot))):
@@ -242,29 +265,26 @@ class transistor():
         The value of V_G that gives the highest magnitude I_SD is used.
         """
 
-        if self.deformMode == 'uniaxial-L' or self.deformMode ==  'uniaxial-W':
-
+        if self.isUniaxial():
             self.I_SDrel = np.zeros(np.size(self.erL))
             self.I_SD_undeformed = self.I_SD[self.V_SD_satidx, self.I_SD_maxidx, self.er_1_idx]
 
             for i in range(np.size(self.erL)):
                 self.I_SDrel[i] = self.I_SD[self.V_SD_satidx, self.I_SD_maxidx,i]/self.I_SD_undeformed
 
-        elif self.deformMode == 'biaxial-WL':
-
+        elif self.isBiaxial():
             self.I_SDrel = np.zeros((np.size(self.erW), np.size(self.erL)))
             self.I_SD_undeformed = self.I_SD[self.V_SD_satidx, self.I_SD_maxidx, self.er_1_idx, self.er_1_idx]
 
             for i in range(np.size(self.erL)):
                 for j in range(np.size(self.erW)):
-                    self.I_SDrel[j,i] = self.I_SD[self.V_SD_satidx, self.I_SD_maxidx, j, i]/self.I_SD_undeformed
+                    self.I_SDrel[j,i] = self.I_SD[self.V_SD_satidx, self.I_SD_maxidx, j, i] / self.I_SD_undeformed
 
     def plotRelativeI_SD(self):
 
         """Plot relative source-drain current in the saturation regime vs. extension ratio."""
 
-        if self.deformMode == 'uniaxial-L' or self.deformMode ==  'uniaxial-W':
-
+        if self.isUniaxial():
             fig = plt.figure(figsize=(5, 5))
             ax = fig.add_axes([0, 0, 1, 1])
             ax.xaxis.set_tick_params(which='major', size=10, width=2, direction='in', top='on')
@@ -279,8 +299,7 @@ class transistor():
 
             plt.show()
 
-        elif self.deformMode == 'biaxial-WL':
-
+        elif self.isBiaxial():
             fig = plt.figure(figsize=(5, 5))
             ax = fig.add_axes([0, 0, 1, 1])
 
@@ -294,8 +313,7 @@ class transistor():
 
             plt.show()
 
-class inverter():
-
+class Inverter:
     """
     Define a stretchable inverter object.
 
@@ -312,25 +330,23 @@ class inverter():
 
     """
 
-    def __init__(self, ntype, ptype):
-
+    def __init__(self, ntype: Transistor, ptype: Transistor):
         self.ntype = ntype
         self.ptype = ptype
 
-        if np.array_equal(ntype.er, ptype.er) == False:
-            print('The n-type and p-type transistors must have identical arrays of extension ratios (er).')
+        if not np.array_equal(ntype.er, ptype.er):
+            raise ValueError('The n-type and p-type transistors must have identical arrays of extension ratios (er).')
 
         if ntype.V_DD != ptype.V_DD:
-            print('The n-type and p-type transistors must have identical supply voltages (V_DD).')
+            raise ValueError('The n-type and p-type transistors must have identical supply voltages (V_DD).')
 
     def buildVTC(self):
-
         """
         Build the voltage transfer curve (VTC) by finding where the n- and p-type load curves cross.
         The accuracy of this calculation depends on your voltage scan resolution, V_resolution.
         """
 
-        if (self.ntype.deformMode == 'uniaxial-L' or self.ntype.deformMode ==  'uniaxial-W') and (self.ptype.deformMode == 'uniaxial-L' or self.ptype.deformMode ==  'uniaxial-W'):
+        if self.ntype.isUniaxial() and self.ptype.isUniaxial():
             self.V_out_cross = np.zeros((np.size(self.ntype.V_G,0),np.size(self.ntype.er,0)))
             for i in range(np.size(self.ntype.er)):
                 for j in range (np.size(self.ntype.V_G)):
@@ -339,7 +355,7 @@ class inverter():
                             self.V_out_cross[j,i] = self.ntype.V_SD[k]
                             break
 
-        elif (self.ntype.deformMode == 'biaxial-WL') and (self.ptype.deformMode == 'biaxial-WL'):
+        elif self.ntype.isBiaxial() and self.ptype.isBiaxial():
             self.V_out_cross = np.zeros((np.size(self.ntype.V_G),np.size(self.ntype.er),np.size(self.ntype.er)))
             for h in range(np.size(self.ntype.er)):
                 for i in range(np.size(self.ntype.er)):
@@ -350,17 +366,18 @@ class inverter():
                                 break
 
         else:
-            print('This deformation scenario is unsupported.')
+            raise ValueError(f'This deformation scenario is unsupported. Received {self.ntype.deformMode} and {self.ptype.deformMode}')
 
     def plotLoadCurves(self, V_in_LCplot, er_LCplot):
-        """Plot a series of load curves.
+        """
+        Plot a series of load curves.
 
         Inputs:
             V_in_LCplot (List[float]): list of the input voltages to plot
                 Note: These values should be contained in your voltage sweep.
         """
 
-        if (self.ntype.deformMode == 'uniaxial-L' or self.ntype.deformMode ==  'uniaxial-W') and (self.ptype.deformMode == 'uniaxial-L' or self.ptype.deformMode ==  'uniaxial-W'):
+        if self.ntype.isUniaxial() and self.ptype.isUniaxial():
 
             idx_er = (np.abs(self.ntype.er - er_LCplot)).argmin()
             idx_n = np.zeros((np.size(V_in_LCplot)))
@@ -401,8 +418,7 @@ class inverter():
             #plt.savefig('Final_Plot.png', dpi=300, transparent=False, bbox_inches='tight')
 
         else:
-
-            print('Currently unsupported.')
+            raise ValueError(f'This deformation scenario is unsupported. Received {self.ntype.deformMode} and {self.ptype.deformMode}')
 
     def plotLoadCurves_alternative(self, V_in_LCplot, er_LCplot):
         """Plot a series of load curves, alternative coordinate system.
@@ -414,8 +430,7 @@ class inverter():
                 Note: This value should be contained in your extension ratio sweep.
         """
 
-        if (self.ntype.deformMode == 'uniaxial-L' or self.ntype.deformMode ==  'uniaxial-W') and (self.ptype.deformMode == 'uniaxial-L' or self.ptype.deformMode ==  'uniaxial-W'):
-
+        if self.ntype.isUniaxial() and self.ptype.isUniaxial():
             idx_er = (np.abs(self.ntype.er - er_LCplot)).argmin()
             idx_n = np.zeros((np.size(V_in_LCplot)))
             idx_p = np.zeros((np.size(V_in_LCplot)))
@@ -450,19 +465,18 @@ class inverter():
             plt.show()
 
         else:
-
-            print('Currently unsupported.')
+            raise ValueError(f'This deformation scenario is unsupported. Received {self.ntype.deformMode} and {self.ptype.deformMode}')
 
     def plotVTC(self, er_plot):
-        """Plot the voltage transfer curve of the inverter vs. deformation.
+        """
+        Plot the voltage transfer curve of the inverter vs. deformation.
 
         Inputs:
             er_plot (List[float]): list of the extension ratios to plot
                 Note: These values should be contained in your extension ratio sweep.
         """
 
-        if (self.ntype.deformMode == 'uniaxial-L' or self.ntype.deformMode ==  'uniaxial-W') and (self.ptype.deformMode == 'uniaxial-L' or self.ptype.deformMode ==  'uniaxial-W'):
-
+        if self.ntype.isUniaxial() and self.ptype.isUniaxial():
             idx_er = np.zeros((np.size(er_plot)))
 
             for i in range((np.size(er_plot))):
@@ -493,11 +507,11 @@ class inverter():
             plt.show()
 
         else:
-
-            print('Currently unsupported.')
+            raise ValueError(f'This deformation scenario is unsupported. Received {self.ntype.deformMode} and {self.ptype.deformMode}')
 
     def plotVTCeye(self, er_plot):
-        """Plot the voltage transfer curve of the inverter vs. deformation as an eye diagram.
+        """
+        Plot the voltage transfer curve of the inverter vs. deformation as an eye diagram.
         The VTC is overlaid with itself, flipped and rotated.
 
         Inputs:
@@ -505,8 +519,7 @@ class inverter():
                 Note: These values should be contained in your extension ratio sweep.
         """
 
-        if (self.ntype.deformMode == 'uniaxial-L' or self.ntype.deformMode ==  'uniaxial-W') and (self.ptype.deformMode == 'uniaxial-L' or self.ptype.deformMode ==  'uniaxial-W'):
-
+        if self.ntype.isUniaxial() and self.ptype.isUniaxial():
             eye_x = np.zeros((np.size(self.V_out_cross,0),np.size(self.ntype.er,0)))
             eye_y = np.zeros((np.size(self.V_out_cross,0),np.size(self.ntype.er,0)))
 
@@ -546,5 +559,4 @@ class inverter():
             plt.show()
 
         else:
-
-            print('Currently unsupported.')
+            raise ValueError(f'This deformation scenario is unsupported. Received {self.ntype.deformMode} and {self.ptype.deformMode}')
